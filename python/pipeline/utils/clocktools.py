@@ -2,12 +2,12 @@ import warnings
 import numpy as np
 import datajoint as dj
 import matplotlib.pyplot as plt
-from stimulus import stimulus
 from scipy import interpolate
 from itertools import groupby
 from pipeline import treadmill, fuse, shared, odor
 from pipeline.exceptions import PipelineException
 
+stimulus = dj.create_virtual_module("stimulus", "pipeline_stimulus")
 pupil = dj.create_virtual_module("pipeline_eye", "pipeline_eye")
 
 

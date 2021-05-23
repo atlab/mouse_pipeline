@@ -107,8 +107,9 @@ class RunningMethod(dj.Lookup):
     ---
     run_method_description        : varchar(256)        # description of running classification method
     """
-    contents = [[1, 'Threshold based method requiring run times > 1sec and concatenating run times < 1sec apart'],
-                ]
+    contents = [[1, 'Threshold based method requiring run times > 1sec and concatenating run times < 3sec apart'],
+                [2, 'Threshold based method with 1sec padding. Run times must be > 1sec long and are concatenated if < 3sec apart.'],
+                [3, 'Threshold based method with 10sec padding. Run times must be > 1sec long and are concatenated if < 21sec apart.'],]
  
     
 @schema
@@ -162,7 +163,33 @@ class Running(dj.Computed):
             run_speed_threshold = 1 ## cm/sec
             maximum_time_gap = 3    ## sec
             minimum_run_length = 1  ## sec
+            padding_time = 0 ## sec
             
+            running_indices = np.where(filt_treadmill_speed > run_speed_threshold)[0]
+            combined_running_periods = self._combine_running_periods(running_indices, treadmill_times, maximum_time_gap)
+            finalized_running_periods = self._remove_short_running_periods(combined_running_periods, treadmill_times, minimum_run_length)
+
+            
+        elif key['running_method_id'] == 2:
+        
+            ## CONSTANTS
+            run_speed_threshold = 0.5 ## cm/sec
+            maximum_time_gap = 3    ## sec
+            minimum_run_length = 1  ## sec
+            padding_time = 1 ## sec (MUST BE LESS THAN HALF MAXIMUM TIME GAP)
+
+            running_indices = np.where(filt_treadmill_speed > run_speed_threshold)[0]
+            combined_running_periods = self._combine_running_periods(running_indices, treadmill_times, maximum_time_gap)
+            finalized_running_periods = self._remove_short_running_periods(combined_running_periods, treadmill_times, minimum_run_length)
+        
+        elif key['running_method_id'] == 3:
+        
+            ## CONSTANTS
+            run_speed_threshold = 0.5 ## cm/sec
+            maximum_time_gap = 21    ## sec
+            minimum_run_length = 1  ## sec
+            padding_time = 10 ## sec (MUST BE LESS THAN HALF MAXIMUM TIME GAP)
+
             running_indices = np.where(filt_treadmill_speed > run_speed_threshold)[0]
             combined_running_periods = self._combine_running_periods(running_indices, treadmill_times, maximum_time_gap)
             finalized_running_periods = self._remove_short_running_periods(combined_running_periods, treadmill_times, minimum_run_length)
@@ -179,20 +206,22 @@ class Running(dj.Computed):
         num_run_periods = len(finalized_running_periods)
         
         ## Loop through running periods
+        first_tread_time = np.nanmin(treadmill_times)
+        last_tread_time = np.nanmax(treadmill_times)
         running_period_keys = []
         total_run_duration = 0
         for n,running_period in enumerate(finalized_running_periods):
             run_period_key = key.copy()
             run_period_key['run_idx'] = n+1
-            run_period_key['run_onset'] = treadmill_times[running_period[0]]
-            run_period_key['run_offset'] = treadmill_times[running_period[-1]]
+            run_period_key['run_onset'] = np.max((treadmill_times[running_period[0]] - padding_time, first_tread_time))
+            run_period_key['run_offset'] = np.min((treadmill_times[running_period[-1]] + padding_time, last_tread_time))
             run_period_key['run_duration'] = run_period_key['run_offset'] - run_period_key['run_onset']
             run_period_key['mean_velocity'] = np.nanmean(filt_treadmill_velocity[running_period])
             run_period_key['mean_speed'] = np.nanmean(filt_treadmill_speed[running_period])
             run_period_key['max_speed'] = np.nanmax(filt_treadmill_speed[running_period])
             total_run_duration += run_period_key['run_duration']
             running_period_keys.append(run_period_key)
-            
+        
         ## Calculate total running statistics
         treadmill_duration = np.nanmax(treadmill_times) - np.nanmin(treadmill_times)
         percent_running = total_run_duration / treadmill_duration * 100
@@ -311,6 +340,32 @@ class Running(dj.Computed):
         return long_running_fragments
     
     
+    def get_nonrunning_idx(self, key):
+        
+        onsets, offsets = (Running.Period & key).fetch('run_onset', 'run_offset')
+        frame_times = clocktools.fetch_timing_data(key, source_type='fluorescence-behavior', target_type='fluorescence-behavior')[0]
+
+        non_running_indices = np.ones_like(frame_times).astype(bool)
+        for onset,offset in zip(onsets, offsets):
+            non_running_fragment = ~np.all(np.vstack((onset < frame_times, frame_times < offset)),axis=0)
+            non_running_indices = np.all(np.vstack((non_running_fragment, non_running_indices)),axis=0)
+        
+        return non_running_indices
+    
+    
+    def get_running_idx(self, key):
+        
+        onsets, offsets = (Running.Period & key).fetch('run_onset', 'run_offset')
+        frame_times = clocktools.fetch_timing_data(key, source_type='fluorescence-behavior', target_type='fluorescence-behavior')[0]
+
+        running_indices = np.zeros_like(frame_times).astype(bool)
+        for onset,offset in zip(onsets, offsets):
+            running_fragment = np.all(np.vstack((onset < frame_times, frame_times < offset)),axis=0)
+            running_indices = np.any(np.vstack((running_fragment, running_indices)),axis=0)
+        
+        return running_indices
+
+
     def plot_running_periods(self, threshold=None, use_raw=False, x_stepsize=None, figsize=(100,10)):
 
         key = self.fetch1('KEY')
