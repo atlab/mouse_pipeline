@@ -300,7 +300,7 @@ class FilterMethod(dj.Lookup):
             filtered_signal: Numpy array of the median filtered input signal
         """
         
-        window_idx_length = round(signal_freq * window_sec)
+        window_idx_length = int(round(signal_freq * window_sec))
         
         ## Window length must be odd
         if window_idx_length % 2 == 0:
