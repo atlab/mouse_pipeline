@@ -199,7 +199,37 @@ class OdorSync(dj.Imported):
         frame_intervals = np.diff(frame_times)
         frame_period = np.median(frame_intervals)
         if np.any(abs(frame_intervals - frame_period) > 0.15 * frame_period):
-            raise PipelineException('Frame time period is irregular')
+            print('Frame time period is irregular, attempting to guess and extract correct times.')
+            
+            # Attempt to fix by finding the largest fragment of times without an outlier and seeing if it matches requested frame number
+            n_frames_r = (meso.ScanInfo & (MesoMatch & key)).fetch1('nframes_requested')
+            error_interval_idx = np.where((frame_intervals - frame_period) > frame_period*0.15)[0]
+            bounds_idx = np.insert(error_interval_idx, [0,len(error_interval_idx)], [0,len(frame_intervals)])
+            longest_fragment = np.max(np.diff(bounds_idx))
+            
+            # Guess correct start and end time
+            s_idx = np.argmax(np.diff(bounds_idx))
+            start = bounds_idx[s_idx]
+            end = bounds_idx[s_idx+1]
+            
+            # Depending on how 
+            if end - start == n_frames_r-1:
+                print(f'Longest fragment is {end-start} frames long, but there are {n_frames_r} frames requested. Adding 1 to the end idx.')
+                end += 1
+            elif end-start == n_frames_r:
+                print(f'Longest fragment length equals nFrames. Shifting start & end by one forward to avoid including error at start.')
+                start += 1
+                end += 1
+            else:
+                raise PipelineException(f'Unsupported length mismatch of longest fragment length {len(start-end)} vs nFrames {n_frames_rrames_r}.')
+            
+            # Rerun error checking with new frame_times fragment
+            frame_times = frame_times[start:end]
+            frame_intervals = np.diff(frame_times)
+            frame_period = np.median(frame_intervals)
+            
+            if np.any(abs(frame_intervals - frame_period) > 0.15 * frame_period) or len(frame_times) != n_frames_r:
+                raise PipelineException('Frame time period is irregular and cannot be corrected.')
 
         self.insert1({**key, 'signal_start_time': frame_times[0],
                       'signal_duration': frame_times[-1] - frame_times[0],
