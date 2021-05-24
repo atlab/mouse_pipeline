@@ -448,9 +448,10 @@ class PupilTracker:
     @staticmethod
     def display(gray, blur, thres, eye_roi, fr_count, n_frames, ncontours=0, contour=None, ellipse=None,
                 eye_center=None,
-                font=cv2.FONT_HERSHEY_SIMPLEX):
+                font=None):
+        if font is None:
+            font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.imshow('blur', blur)
-
         cv2.imshow('threshold', thres)
         cv2.putText(gray, "Frames {fr_count}/{frames} | Found contours {ncontours}".format(fr_count=fr_count,
                                                                                            frames=n_frames,
