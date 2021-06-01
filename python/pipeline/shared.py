@@ -104,7 +104,8 @@ class SpikeMethod(dj.Lookup):
     contents = [
         [2, 'foopsi', 'nonnegative sparse deconvolution from Vogelstein (2010)', 'python'],
         [3, 'stm', 'spike triggered mixture model from Theis et al. (2016)', 'python'],
-        [5, 'nmf', 'noise constrained deconvolution from Pnevmatikakis et al. (2016)', 'python']
+        [5, 'nmf', 'noise constrained deconvolution from Pnevmatikakis et al. (2016)', 'python'],
+        [6, 'dnmf', 'noise constrained deconvolution from Pnevmatikakis et al. (2016) on detrended fluorescence', 'python']
     ]
 
 @schema

@@ -5,6 +5,8 @@ from caiman import components_evaluation
 from caiman.utils import visualization
 from caiman.source_extraction.cnmf import map_reduce, initialization, pre_processing, \
                                           merging, spatial, temporal, deconvolution
+from .caiman_stats import df_percentile
+from scipy.ndimage import percentile_filter
 import glob, os, sys, time
 
 
@@ -387,6 +389,34 @@ def deconvolve(trace, AR_order=2):
     _, _, _, AR_coeffs, _, spike_trace, _ = deconvolution.constrained_foopsi(trace,
         p=AR_order, method='cvxpy', bas_nonneg=False, fudge_factor=0.96)
         # fudge_factor is a regularization term
+
+    return spike_trace, AR_coeffs
+
+
+def deconvolve_detrended(trace, scan_fps, detrend_period=600, AR_order=2):
+    """Same as the the `deconvolve` method, except that the fluorescence trace is detrended 
+    before autoregressive modeling
+
+    :param np.array trace: 1-d array (num_frames) with the fluorescence trace.
+    :param float scan_fps: fps of the scan
+    :param float detrend_period: number of seconds over which percentiles are computed
+    :param int AR_order: Order of the autoregressive process used to model the impulse
+        response function, e.g., 0 = no modelling; 2 = model rise plus exponential decay.
+
+    :returns: Deconvolved spike trace.
+    :returns: AR coefficients (AR_order) that model the calcium response:
+            c(t) = c(t-1) * AR_coeffs[0] + c(t-2) * AR_coeffs[1] + ...
+    """
+    detrend_window = int(round(detrend_period * scan_fps))
+    n_chunks = len(trace) // detrend_window
+    if detrend_window > 0 and n_chunks > 0:
+        chunks_len = n_chunks * detrend_window
+        trace_chunks = trace[:chunks_len].reshape(-1, detrend_window)
+        data_prct = df_percentile(trace_chunks, axis=1)[0].mean()
+        trace = trace - percentile_filter(trace, data_prct, detrend_window)
+
+    _, _, _, AR_coeffs, _, spike_trace, _ = deconvolution.constrained_foopsi(trace,
+        p=AR_order, method='cvxpy', bas_nonneg=False, fudge_factor=0.96)
 
     return spike_trace, AR_coeffs
 

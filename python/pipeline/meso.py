@@ -1879,6 +1879,25 @@ class Activity(dj.Computed):
                     {**key, "unit_id": unit_id, "g": ar_coeffs},
                     ignore_extra_fields=True,
                 )
+
+        elif key["spike_method"] == 6:  # dnmf
+            from pipeline.utils import caiman_interface as cmn
+            import multiprocessing as mp
+            from functools import partial
+
+            scan_fps = (ScanInfo & key).fetch1('fps')
+            deconvolve = partial(cmn.deconvolve_detrended, scan_fps=scan_fps)
+            with mp.Pool(10) as pool:
+                results = pool.map(deconvolve, full_traces)
+            for unit_id, (spike_trace, ar_coeffs) in zip(unit_ids, results):
+                spike_trace = spike_trace.astype(np.float32, copy=False)
+                Activity.Trace().insert1(
+                    {**key, "unit_id": unit_id, "trace": spike_trace}
+                )
+                Activity.ARCoefficients().insert1(
+                    {**key, "unit_id": unit_id, "g": ar_coeffs},
+                    ignore_extra_fields=True,
+                )
         else:
             msg = "Unrecognized spike method {}".format(key["spike_method"])
             raise PipelineException(msg)
