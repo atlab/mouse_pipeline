@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 from stimulus import stimulus
 from scipy import interpolate
 from itertools import groupby
-from pipeline import treadmill, fuse, shared, odor
+from pipeline import fuse, shared
 from pipeline.exceptions import PipelineException
 
+treadmill = dj.create_virtual_module("treadmill", "pipeline_treadmill")
+odor = dj.create_virtual_module("odor", "pipeline_odor")
 pupil = dj.create_virtual_module("pipeline_eye", "pipeline_eye")
 
 
