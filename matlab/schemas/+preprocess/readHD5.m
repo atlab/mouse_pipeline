@@ -167,20 +167,38 @@ switch version
                 data.scanImage = wf(:,2);
                 data.ts = wf(:,3);
             case 2.1
-                idx1 = find(waveformDescStr == ',') ; % need to take care of a comma misplacement in some files
-                waveformDescStr(idx1) = ' ' ;
-                teststr = 'Photodiode, ScanImageFrameSync, LaserPower, Time' ;
-                idx2 = find(teststr == ',') ;
-                teststr(idx2) = ' ' ;
-                assert(strcmp(deblank(waveformDescStr),deblank(teststr)),...
+                wfstr = deblank(waveformDescStr) ;
+                assert(strcmp(wfstr,'Photodiode, ScanImageFrameSync, LaserPower ,Time') ||...
+                    strcmp(wfstr,'Photodiode, ScanImageFrameSync, LaserPower, Time') ||...
+                    strcmp(wfstr,'Photodiode, ScanImageFrameSync, LaserPower, AudioStimWindow, Time'),...
+            'waveform Channels Description is wrong for this file version');
+                idx = strfind(wfstr,',') ;
+                ch_names = {} ;
+                for ii=1:length(idx)+1
+                    if ii == 1
+                        ch_names{ii} = sscanf(wfstr(1:idx(ii)-1),'%s') ;
+                    elseif ii == length(idx)+1
+                        ch_names{ii} = sscanf(wfstr(idx(ii-1)+1:end),'%s') ;
+                    else
+                        ch_names{ii} = sscanf(wfstr(idx(ii-1)+1:idx(ii)-1),'%s') ;
+                    end
+                end                        
+                wf = H5Tools.readDataset(fp,'Analog Signals') ;
+                ipos = strcmp(ch_names, 'Photodiode') ;
+                data.syncPd = wf(:,ipos);
+                ipos = strcmp(ch_names, 'ScanImageFrameSync') ;
+                data.scanImage = wf(:,ipos);
+                ipos = strcmp(ch_names, 'Time') ;
+                data.ts = wf(:,ipos);
+            case 2.2
+                assert(strcmp(deblank(waveformDescStr),'Photodiode, ScanImageFrameSync, LaserPower, Temperature ,Time'),...
             'waveform Channels Description is wrong for this file version');
                 wf = H5Tools.readDataset(fp,'Analog Signals') ;
                 data.syncPd = wf(:,1);
                 data.scanImage = wf(:,2);
-                data.ts = wf(:,4);
+                data.ts = wf(:,5);        
         end
-        
-        
+                
         % close file
         H5F.close(fp);
         
